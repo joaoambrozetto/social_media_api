@@ -1,22 +1,49 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Response, status, HTTPException
 from fastapi.params import Body
+from pydantic import BaseModel
+from typing import Optional
+from random import randrange
 
 app = FastAPI()
+
+class Post(BaseModel):
+    title: str
+    content: str
+    published: bool = True
+    rating: Optional[int] = None
+
+my_posts = [{"title": "title of post 1", "content": "content of post 1", "id": 1},
+            {"title": "favorite foods", "content": "I like pizza", "id": 2}]
+
+def find_post(id):
+    for p in my_posts:
+        if p['id'] == id:
+            return p
+
+# In order to start the live server, the command fastapi dev main.py doesn't works,
+# we need to type python -m fastapi dev main.py
 
 @app.get("/")
 def root():
     return {"message": "Welcome to my API!"}
 
-# In order to start the live server, the command fastapi dev main.py doesn't works,
-# we need to type python -m fastapi dev main.py
-
 @app.get("/posts")
 def get_posts():
-    return {"data": "This is your posts"}
+    return {"data": my_posts}
 
-@app.post("/createposts")
-def create_posts(payLoad: dict = Body(...)):
-    print(payLoad)
-    return {"new_post": f"title {payLoad['title']} content {payLoad['content']}"}
+@app.post("/posts", status_code=status.HTTP_201_CREATED)
+def create_posts(post: Post):
+    post_dict = post.dict()
+    post_dict['id'] = randrange(0, 1000000)
+    my_posts.append(post_dict)
+    return {"data": post_dict}
 
-# continue to watch from 1:07:34
+@app.get("/posts/{id}")
+def get_post(id: int, response: Response):
+    post = find_post(id)
+    if not post:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail=f"post with id: {id} was not found")
+    return {"post_detail": post}
+
+# continue to watch from 2:01:55
