@@ -8,9 +8,14 @@ from pathlib import Path
 import psycopg
 import os
 import time
+from . import models
+from .database import engine
+
+models.Base.metadata.create_all(engine)
 
 dotenv_path = Path(__file__).parent / ".env"
 load_dotenv(dotenv_path=dotenv_path)
+
 app = FastAPI()
 
 class Post(BaseModel):
