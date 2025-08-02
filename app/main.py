@@ -8,15 +8,18 @@ from pathlib import Path
 import psycopg
 import os
 import time
-from . import models
-from .database import engine
-
-models.Base.metadata.create_all(engine)
+from .database import engine, create_db_and_tables, get_session
+from contextlib import asynccontextmanager
 
 dotenv_path = Path(__file__).parent / ".env"
 load_dotenv(dotenv_path=dotenv_path)
 
-app = FastAPI()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    create_db_and_tables()
+    yield
+
+app = FastAPI(lifespan=lifespan)
 
 class Post(BaseModel):
     title: str
