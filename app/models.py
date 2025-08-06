@@ -1,7 +1,9 @@
-from typing import List, Optional
-from sqlalchemy import TIMESTAMP, ForeignKey, String, text
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 import datetime
+from typing import List, Optional
+
+from sqlalchemy import ForeignKey, String, text, TIMESTAMP
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
 
 class Base(DeclarativeBase):
     pass

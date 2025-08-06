@@ -1,15 +1,20 @@
-from fastapi import FastAPI, Response, status, HTTPException
-from fastapi.params import Body
-from pydantic import BaseModel
-from typing import Optional
-from random import randrange
-from dotenv import load_dotenv
-from pathlib import Path
-import psycopg
 import os
 import time
-from .database import engine, create_db_and_tables, get_session
 from contextlib import asynccontextmanager
+from pathlib import Path
+from random import randrange
+from typing import Optional
+
+import psycopg
+from dotenv import load_dotenv
+from fastapi import Depends, FastAPI, HTTPException, Response, status
+from fastapi.params import Body
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
+from . import models, schemas
+from .database import create_db_and_tables, engine, get_session
+
 
 dotenv_path = Path(__file__).parent / ".env"
 load_dotenv(dotenv_path=dotenv_path)
@@ -21,10 +26,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-class Post(BaseModel):
-    title: str
-    content: str
-    published: bool = True
+
 
 while True:
 
@@ -70,48 +72,59 @@ def convert_data(data):
 def root():
     return {"message": "Welcome to my API!"}
 
+
 @app.get("/posts")
-def get_posts():
-    cur.execute("""SELECT * FROM posts""")
-    posts = convert_data(cur.fetchall())    
+def get_posts(db: Session = Depends(get_session)):
+    posts = db.query(models.Post).all()
+
     return {"data": posts}
 
+
 @app.post("/posts", status_code=status.HTTP_201_CREATED)
-def create_posts(post: Post):
-    cur.execute("""INSERT INTO posts (title, content, published) VALUES (%s, %s, %s) RETURNING *""", (post.title, post.content, post.published))
-    new_post = cur.fetchone()
-    conn.commit()
+def create_posts(post: schemas.CreatePost, db: Session = Depends(get_session)):
+    new_post = models.Post(**post.model_dump())
+    db.add(new_post)
+    db.commit()
+    db.refresh(new_post)
+
     return {"data": new_post}
 
+
 @app.get("/posts/{id}")
-def get_post(id: int, response: Response):
-    cur.execute("""SELECT * FROM posts WHERE id = %s""", (str(id),))
-    post = cur.fetchone()
+def get_post(id: int, db: Session = Depends(get_session)):
+    post = db.query(models.Post).filter(models.Post.id == id).first()    
 
     if not post:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail=f"post with id: {id} was not found")
+
     return {"post_detail": post}
 
-@app.delete("/posts/{id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_post(id: int):
-    cur.execute("""DELETE FROM posts WHERE id = %s RETURNING *""", (str(id),))
-    deleted_post = cur.fetchone()
-    conn.commit()
 
-    if deleted_post == None:
+@app.delete("/posts/{id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_post(id: int, db: Session = Depends(get_session)):
+    post = db.query(models.Post).filter(models.Post.id == id)
+
+    if post.first() == None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail=f"post with id: {id} does not exist")
+
+    post.delete(synchronize_session=False)
+    db.commit()
+
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
-@app.put("/posts/{id}")
-def update_post(id: int, post: Post):
-    cur.execute("""UPDATE posts SET title = %s, content = %s, published = %s WHERE id = %s RETURNING *""", (post.title, post.content, post.published, str(id)))
-    updated_post = cur.fetchone()
-    conn.commit()
 
-    if updated_post == None:
+@app.put("/posts/{id}")
+def update_post(id: int, updated_post: schemas.CreatePost, db: Session = Depends(get_session)):
+    post_query = db.query(models.Post).filter(models.Post.id == id)
+    post = post_query.first()
+
+    if post == None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail=f"post with id: {id} does not exist")
     
-    return {"data": updated_post}
+    post_query.update(updated_post.model_dump(), synchronize_session=False)
+    db.commit()
+    
+    return {"data": post_query.first()}

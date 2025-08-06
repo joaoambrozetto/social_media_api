@@ -1,12 +1,13 @@
+import os
+from pathlib import Path
+
+import psycopg
+from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from . import models
 
-import psycopg
-from pathlib import Path
-import os
-from dotenv import load_dotenv
 
 dotenv_path = Path(__file__).parent / ".env"
 load_dotenv(dotenv_path=dotenv_path)
